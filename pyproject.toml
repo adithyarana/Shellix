@@ -5,7 +5,15 @@ description = "An AI-assisted shell interface"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-dependencies = []
+dependencies = [
+  "typer",
+  "rich",
+  "prompt-toolkit",
+  "pydantic",
+  "httpx",
+  "python-dotenv",
+
+]
 
 [project.scripts]
 shellix = "shellix.main:main"
