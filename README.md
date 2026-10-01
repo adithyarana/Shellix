@@ -132,6 +132,91 @@ Shellix runs in your current working directory. Commands execute in a subprocess
 Shellix is an assistant rather than a replacement for your shell, and a generated
 `cd` command does not change your terminal's directory.
 
+### Review a code fix (source version)
+
+```bash
+shellix fix "Handle empty input without crashing" --project /path/to/project
+```
+
+Omit `--project` to select a directory interactively. Omit the problem to enter it
+at a prompt. Paste terminal errors at `error>` and finish with a line containing
+only `.` (use `.` immediately to skip errors). Fix mode requires an interactive
+terminal and uses the saved OpenRouter settings.
+
+1. Shellix lists the exact eligible filenames and byte sizes. Your problem,
+   pasted errors, and these files' full UTF-8 contents are sent to OpenRouter
+   **only after you answer yes** to the context permission prompt. Answering no
+   makes no API request. Remove sensitive data before approving a request.
+2. One AI request returns a diagnosis and structured full-file replacements.
+   The model receives no file-writing or execution tools. Invalid proposals,
+   duplicate paths, and paths outside the approved context are rejected.
+3. Review the diagnosis, affected files, and unified diff. Terminals at least
+   100 columns wide show conversation/diagnosis beside the diff; narrower
+   terminals stack the panes. Use Tab to switch panes and arrow/page keys to
+   scroll. **Ctrl-A applies, Ctrl-R rejects, Ctrl-V opens Vim**, and Ctrl-C rejects.
+4. Vim edits a temporary proposed file, never the project original. Select a file
+   number; exit Vim normally to return. Shellix recalculates the diff and requires
+   a fresh Apply decision. Vim uses clean settings, no swap/viminfo, and disabled
+   modelines; no editor keystrokes are automated.
+5. Apply rechecks original contents, permissions, and file identity/timestamps,
+   saves a durable private undo record, then atomically replaces each approved
+   file while preserving its permissions. The final output prints exactly the
+   applied diff and an undo command.
+6. Optionally enter one test/check command after applying. It passes through the
+   existing safety validator and requires **separate confirmation even if SAFE**.
+   It runs in the selected project, with the existing timeout. There are no
+   automatic tests, dependency installations, retries, or further fix requests.
+
+To review and undo an applied change, use the printed ID:
+
+```bash
+shellix fix --project /path/to/project --undo <id>
+```
+
+Undo is local, needs no API key/request, shows a diff, and requires Apply approval.
+It refuses to overwrite subsequent changes. Original/replacement contents are
+stored in `.shellix-undo/<id>.json` (directory `0700`, files `0600`), not in logs.
+Keep that directory private and out of version control; records are retained
+until you manually remove them. Interrupted applies retain the record and attempt
+rollback; undo can restore files that were applied before an interruption.
+
+**First-version limits.** Only existing eligible files can be edited: no creation,
+deletion, renaming, or permission changes. Context includes at most 40 files,
+128 KB total, 32 KB per file, and 16 KB of problem/errors; scanning stops after
+2,000 entries. Selection is deterministic and may omit relevant files in large
+projects; the model should return no edits if context is insufficient. Git must
+be installed: its local ignore matcher handles nested `.gitignore` rules and
+negations even outside repositories; repository/global exclusions also apply.
+Internal Git calls only initialize temporary ignore metadata and check ignores.
+
+Shellix excludes ignored files, symlinks, hard-linked files, binary/non-UTF-8
+files, `.env*`, common credentials/key files, virtual environments, dependency
+folders, build outputs, and common caches. Directory traversal uses no-follow
+file descriptors to block symlink escapes. Filename/content credential detection
+is conservative and heuristic; it cannot identify every secret. Review the file
+list before sharing. Errors and file contents are treated as untrusted model data;
+terminal controls are shown as escaped text. Prompt-injection defenses do not
+make model suggestions trustworthy: read the diff before approval.
+
+Each replacement is atomic, but a multi-file apply is not a filesystem-wide
+transaction. Avoid concurrent writers during review/apply; there remains a small
+race between the final stale check and atomic replacement. Permissions are
+preserved, but ownership, ACLs, extended attributes, and original inode identity
+are not preserved. User-approved check commands inherit the existing validator's
+limitations and are not sandboxed to the project. This is a single review cycle,
+not an autonomous coding agent.
+
+**UI choice.** This version retains Rich for normal readable CLI output and
+prompt-toolkit for a scrollable review screen. Textual supports
+[horizontal/vertical layouts](https://textual.textualize.io/guide/layout/) and
+[terminal suspension](https://textual.textualize.io/guide/app/#suspending), making
+it a candidate for a richer persistent interface. Migrating would introduce a
+new dependency and event loop for this focused workflow; prompt-toolkit already
+supports [full-screen applications](https://python-prompt-toolkit.readthedocs.io/en/stable/pages/full_screen_apps.html).
+Vim runs after the review application exits and restores the terminal. Text and
+borders use terminal defaults for dark/light themes; status prefixes have text
+labels with optional standard terminal red/green accents, never color alone.
+
 ### Example session
 
 *Illustrative excerpt after setup, with the startup banner omitted. The command,
@@ -167,6 +252,8 @@ Goodbye! 👋
 | --- | --- |
 | `shellix` | Start an interactive session; offer setup if settings are missing. |
 | `shellix "list files"` | Process one request, then exit. |
+| `shellix fix [problem] --project PATH` | Propose and review existing-file edits with explicit sharing/apply approval. |
+| `shellix fix --project PATH --undo ID` | Review a local undo without an AI request. |
 | `shellix configure` | Change the saved OpenRouter key and model. |
 | `shellix --help` | Show CLI help without starting the AI provider. |
 | `shellix --version` | Print `Shellix AI <version>` from the installed package and exit without setup or AI initialization. |

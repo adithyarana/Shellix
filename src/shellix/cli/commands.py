@@ -151,7 +151,7 @@ class PromptGroup(TyperGroup):
     """Route the original positional request syntax to the hidden run command."""
 
     def resolve_command(self, ctx: typer.Context, args: list[str]):
-        if args and not args[0].startswith("-") and args[0] != "configure":
+        if args and not args[0].startswith("-") and args[0] not in {"configure", "fix"}:
             return "run", self.get_command(ctx, "run"), args
         return super().resolve_command(ctx, args)
 
@@ -256,3 +256,36 @@ def main(
 @app.command(hidden=True)
 def run(prompt: str = typer.Argument(..., help="Natural-language request.")) -> None:
     start(prompt)
+
+
+@app.command()
+def fix(
+    problem: Optional[str] = typer.Argument(None, help="Describe the code problem."),
+    project: Optional[str] = typer.Option(None, "--project", "-p", help="Project directory to approve."),
+    undo: Optional[str] = typer.Option(None, "--undo", help="Review and undo an applied change ID locally."),
+) -> None:
+    """Propose existing-file edits, review a diff, and apply only with permission."""
+    from pathlib import Path
+    from shellix.fixing.project import FixError
+    from shellix.fixing.workflow import FixWorkflow
+    if not is_interactive():
+        typer.echo("Run shellix fix in an interactive terminal for explicit approvals.", err=True)
+        raise typer.Exit(1)
+    try:
+        root = Path(project or typer.prompt("Project directory", default=str(Path.cwd())))
+        ui = TerminalUI()
+        if undo:
+            FixWorkflow(ui).run(root, '', undo=undo)
+            return
+        problem = problem or typer.prompt("Describe the problem")
+        errors = ui.get_errors()
+        manager = ConfigManager()
+        settings = manager.load() or configure_settings(manager)
+        provider = OpenRouterProvider(api_key=settings.api_key.get_secret_value(), model=settings.model)
+        FixWorkflow(ui, provider).run(root, problem, errors)
+    except (ConfigurationError, AIRequestError, FixError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from None
+    except (KeyboardInterrupt, EOFError, typer.Abort):
+        typer.echo("Fix cancelled.")
+        raise typer.Exit(130) from None

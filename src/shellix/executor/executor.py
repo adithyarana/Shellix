@@ -7,7 +7,7 @@ class CommandExecutor:
     def __init__(self, timeout: int = 30) -> None:
         self.timeout = timeout
 
-    def execute(self, command: str) -> ExecutionResult:
+    def execute(self, command: str, *, cwd: str | None = None) -> ExecutionResult:
         try:
             completed_process = subprocess.run(
                 command,
@@ -15,6 +15,7 @@ class CommandExecutor:
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
+                cwd=cwd,
             )
 
             return ExecutionResult(
