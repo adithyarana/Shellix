@@ -1,12 +1,8 @@
 from shellix.cli.commands import app
-from dotenv import load_dotenv
-
 
 
 def main() -> None:
-    """Application entry point."""
-
-    load_dotenv()
+    """Application entry point; configuration comes only from the user file."""
     app()
 
 

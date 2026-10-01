@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
-import os
+from pydantic import ValidationError
 
 import httpx
 
 from shellix.ai.provider import AIProvider
 from shellix.core.models import AIResponse, TerminalContext
+
+
+class AIRequestError(Exception):
+    """An AI request failure with a message safe to display."""
 
 
 class OpenRouterProvider(AIProvider):
@@ -17,21 +21,15 @@ class OpenRouterProvider(AIProvider):
     def __init__(
         self,
         *,
-        api_key: str | None = None,
-        model: str | None = None,
+        api_key: str,
+        model: str,
         timeout: float = 60.0,
     ) -> None:
-        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
-        self.model = model or os.getenv(
-            "OPENROUTER_MODEL",
-            "openai/gpt-4o-mini",
-        )
+        if not api_key.strip() or not model.strip():
+            raise ValueError("OpenRouter API key and model ID are required.")
+        self.api_key = api_key.strip()
+        self.model = model.strip()
         self.timeout = timeout
-
-        if not self.api_key:
-            raise ValueError(
-                "OPENROUTER_API_KEY is not configured."
-            )
 
     def generate(
         self,
@@ -63,20 +61,35 @@ class OpenRouterProvider(AIProvider):
             "Content-Type": "application/json",
         }
 
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.post(
-                self.BASE_URL,
-                headers=headers,
-                json=payload,
-            )
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(self.BASE_URL, headers=headers, json=payload)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status in {401, 403}:
+                message = "OpenRouter authentication failed. Check your OpenRouter key with shellix configure."
+            elif status in {400, 404, 422}:
+                message = "OpenRouter rejected the request or model ID. Choose an available model with shellix configure."
+            elif status == 402:
+                message = "OpenRouter reports insufficient credits. Check your OpenRouter account."
+            elif status == 429:
+                message = "OpenRouter rate limit reached. Try again later."
+            else:
+                message = "OpenRouter request failed. Try again later."
+            raise AIRequestError(message) from None
+        except httpx.RequestError:
+            raise AIRequestError("Cannot reach OpenRouter. Check your network connection and try again.") from None
 
-        response.raise_for_status()
-
-        data = response.json()
-
-        content = data["choices"][0]["message"]["content"]
-
-        return self._parse_response(content)
+        try:
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+            result = self._parse_response(content)
+            if not result.command.strip():
+                raise ValueError("Empty command")
+            return result
+        except (ValueError, ValidationError, KeyError, IndexError, TypeError, AttributeError):
+            raise AIRequestError("OpenRouter returned an invalid model response. No command was executed.") from None
 
     @staticmethod
     def _build_system_prompt(

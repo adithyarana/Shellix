@@ -1,17 +1,16 @@
 [project]
-name = "shellix"
+name = "shellix-ai"
 version = "0.1.0"
 description = "An AI-assisted shell interface"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
-  "typer",
+  "typer>=0.12",
   "rich",
   "prompt-toolkit",
-  "pydantic",
+  "pydantic>=2",
   "httpx",
-  "python-dotenv",
 
 ]
 
@@ -27,3 +26,9 @@ packages = ["src/shellix"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+
+[project.optional-dependencies]
+dev = ["pytest", "build", "twine"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/README.md", "/LICENSE", "/pyproject.toml"]
