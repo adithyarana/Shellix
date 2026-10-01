@@ -25,6 +25,23 @@ def test_help_without_provider(monkeypatch):
     provider.assert_not_called()
 
 
+@pytest.mark.parametrize("args", [["--version"], ["--version", "configure"]])
+def test_version_exits_before_setup_or_provider(monkeypatch, args):
+    version = Mock(return_value="1.2.3")
+    monkeypatch.setattr(commands.metadata, "version", version)
+    blocked = Mock(side_effect=AssertionError("Version must exit immediately"))
+    monkeypatch.setattr(commands, "ConfigManager", blocked)
+    monkeypatch.setattr(commands, "OpenRouterProvider", blocked)
+    monkeypatch.setattr(commands.typer, "prompt", blocked)
+
+    result = runner.invoke(commands.app, args)
+
+    assert result.exit_code == 0, result.output
+    assert result.output == "Shellix AI 1.2.3\n"
+    version.assert_called_once_with("shellix-ai")
+    blocked.assert_not_called()
+
+
 def test_configure_and_keep_key(monkeypatch):
     provider = Mock()
     monkeypatch.setattr(commands, "OpenRouterProvider", provider)

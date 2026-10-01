@@ -169,6 +169,7 @@ Goodbye! 👋
 | `shellix "list files"` | Process one request, then exit. |
 | `shellix configure` | Change the saved OpenRouter key and model. |
 | `shellix --help` | Show CLI help without starting the AI provider. |
+| `shellix --version` | Print `Shellix AI <version>` from the installed package and exit without setup or AI initialization. |
 | `shellix configure --help` | Show help for configuration. |
 
 ### Change your key or model

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from importlib import metadata
 from typing import Optional
 import sys
 import typer
@@ -233,8 +234,20 @@ def start(prompt: Optional[str] = None) -> None:
         raise typer.Exit(1) from None
 
 
+def show_version(value: bool) -> None:
+    if value:
+        typer.echo(f"Shellix AI {metadata.version('shellix-ai')}")
+        raise typer.Exit()
+
+
 @app.callback(invoke_without_command=True)
-def main(ctx: typer.Context) -> None:
+def main(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False, "--version", callback=show_version, is_eager=True,
+        help="Show the installed Shellix AI version and exit.",
+    ),
+) -> None:
     """Run shellix interactively, or shellix \"list files\" for one request."""
     if ctx.invoked_subcommand is None:
         start()
